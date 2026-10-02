@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Star Yard</title>
+<style>
+  :root {
+    --ink: #f4f1ea;
+    --muted: #b7b1a6;
+    --panel: rgba(12, 14, 18, 0.72);
+    --line: rgba(255,255,255,0.14);
+    --mars: #c44536;
+    --steel: #c5ccd3;
+    --battery: #3cb043;
+    --star: #2a4ea8;
+    --rocket: #f7f7f5;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; background: #07080c; color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden; touch-action: none; user-select: none;
+  }
+  #view { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
+  .hud {
+    position: fixed; z-index: 2; left: 12px; right: 12px;
+    top: calc(10px + var(--safe-t));
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+    pointer-events: none;
+  }
+  .brand { pointer-events: auto; }
+  .brand h1 { margin: 0; font-size: 18px; letter-spacing: 0.04em; font-weight: 700; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  .ghost {
+    pointer-events: auto; border: 1px solid var(--line); background: var(--panel);
+    color: var(--ink); border-radius: 999px; padding: 8px 12px; font-size: 13px;
+  }
+  .cross {
+    position: fixed; left: 50%; top: 42%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+    z-index: 2; pointer-events: none;
+  }
+  .cross::before, .cross::after {
+    content: ""; position: absolute; background: rgba(255,255,255,0.85);
+  }
+  .cross::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  .cross::after { left: 0; top: 6px; width: 14px; height: 2px; }
+  .look-hint {
+    position: fixed; right: 16px; top: 46%; z-index: 2; color: rgba(255,255,255,0.55);
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none;
+    writing-mode: vertical-rl;
+  }
+  .dock {
+    position: fixed; z-index: 3; left: 0; right: 0; bottom: 0;
+    padding: 8px 10px calc(10px + var(--safe-b));
+    background: linear-gradient(to top, rgba(7,8,12,0.92), rgba(7,8,12,0.55) 70%, transparent);
+  }
+  .palette {
+    display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px;
+    scrollbar-width: none;
+  }
+  .palette::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 999px; padding: 8px 12px; font-size: 13px;
+  }
+  .chip.on { border-color: #fff; }
+  .swatch { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25); }
+  .controls { display: flex; gap: 8px; align-items: end; }
+  .pad { display: grid; grid-template-columns: 54px 54px 54px; grid-template-rows: 48px 48px; gap: 6px; }
+  .pad button:nth-child(1) { grid-column: 2; }
+  .actions { margin-left: auto; display: flex; gap: 8px; }
+  button.ctl {
+    border: 1px solid var(--line); background: rgba(18, 20, 26, 0.88); color: var(--ink);
+    border-radius: 14px; min-width: 54px; height: 48px; font-size: 13px; font-weight: 650;
+  }
+  button.ctl:active { transform: translateY(1px); background: rgba(40, 44, 54, 0.95); }
+  button.place { background: #1f6b38; border-color: #2f9a52; min-width: 72px; }
+  button.break { background: #8a2e28; border-color: #c44536; min-width: 72px; }
+  .toast {
+    position: fixed; left: 50%; top: calc(64px + var(--safe-t)); transform: translateX(-50%);
+    z-index: 4; background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 999px; font-size: 13px; display: none;
+  }
+  .start {
+    position: fixed; inset: 0; z-index: 5; display: flex; align-items: flex-end; justify-content: center;
+    background: linear-gradient(to top, rgba(5,6,10,0.88), rgba(5,6,10,0.25));
+    padding: 24px 16px calc(24px + var(--safe-b));
+  }
+  .card {
+    width: min(420px, 100%); background: rgba(14,16,22,0.94); border: 1px solid var(--line);
+    border-radius: 22px; padding: 18px;
+  }
+  .card h2 { margin: 0 0 6px; font-size: 28px; }
+  .card p { margin: 0 0 14px; color: var(--muted); line-height: 1.4; }
+  .card button {
+    width: 100%; height: 52px; border: 0; border-radius: 14px; background: #f4f1ea; color: #12141a;
+    font-size: 17px; font-weight: 700;
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div class="cross" aria-hidden="true"></div>
+<div class="look-hint">Drag right side to look</div>
+<div class="hud">
+  <div class="brand">
+    <h1>Star Yard</h1>
+    <p id="aim">Look at a block</p>
+  </div>
+  <button class="ghost" id="reset" type="button">Reset yard</button>
+</div>
+<div class="toast" id="toast"></div>
+<div class="dock">
+  <div class="palette" id="palette"></div>
+  <div class="controls">
+    <div class="pad">
+      <button class="ctl" type="button" data-move="forward">Fwd</button>
+      <button class="ctl" type="button" data-move="left">Left</button>
+      <button class="ctl" type="button" data-move="back">Back</button>
+      <button class="ctl" type="button" data-move="right">Right</button>
+    </div>
+    <div class="actions">
+      <button class="ctl" type="button" data-move="jump">Jump</button>
+      <button class="ctl place" type="button" id="place">Place</button>
+      <button class="ctl break" type="button" id="break">Break</button>
+    </div>
+  </div>
+</div>
+<div class="start" id="start">
+  <div class="card">
+    <h2>Star Yard</h2>
+    <p>A small block yard. Drag the right side to look. Use the buttons to walk, jump, place, and break. The car and the rocket are yours to take apart.</p>
+    <button type="button" id="play">Start building</button>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const TYPES = [
+  { id: "mars", name: "Mars red", color: 0xc44536, metal: 0.15, rough: 0.7 },
+  { id: "steel", name: "Stainless", color: 0xc5ccd3, metal: 0.82, rough: 0.28 },
+  { id: "battery", name: "Battery green", color: 0x3cb043, metal: 0.2, rough: 0.45 },
+  { id: "star", name: "Star blue", color: 0x1d3f93, metal: 0.25, rough: 0.4 },
+  { id: "rocket", name: "Rocket white", color: 0xf4f6f8, metal: 0.12, rough: 0.42 }
+];
+const FLOOR = "floor";
+const SAVE = "star-yard-v1";
+const YARD = 11;
+
+const canvas = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ea4c4);
+scene.fog = new THREE.Fog(0x8ea4c4, 16, 34);
+
+const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.08, 80);
+const hemi = new THREE.HemisphereLight(0xc5d7ee, 0x6a5a45, 0.7);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1d6, 1.05);
+sun.position.set(8, 14, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 32;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -14;
+sun.shadow.camera.right = sun.shadow.camera.top = 14;
+scene.add(sun);
+
+const geo = new THREE.BoxGeometry(0.98, 0.98, 0.98);
+const materials = {};
+TYPES.forEach(t => {
+  materials[t.id] = new THREE.MeshStandardMaterial({
+    color: t.color, metalness: t.metal, roughness: t.rough
+  });
+});
+materials[FLOOR] = new THREE.MeshStandardMaterial({ color: 0x8d7b66, roughness: 0.92, metalness: 0.02 });
+
+const blocks = new Map();
+const meshes = new Map();
+let selected = "steel";
+let yaw = Math.PI;
+let pitch = -0.38;
+const player = { x: 0.5, y: 1.1, z: 6.4, vx: 0, vy: 0, vz: 0, onGround: false };
+const held = { forward: false, back: false, left: false, right: false, jump: false };
+const radius = 0.28;
+const height = 1.55;
+
+function key(x, y, z) { return x + "," + y + "," + z; }
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.style.display = "none"; }, 1400);
+}
+function setBlock(x, y, z, type, save) {
+  const k = key(x, y, z);
+  if (blocks.has(k)) return;
+  blocks.set(k, type);
+  const mesh = new THREE.Mesh(geo, materials[type]);
+  mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+  mesh.castShadow = type !== FLOOR;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  meshes.set(k, mesh);
+  if (save) persist();
+}
+function removeBlock(x, y, z) {
+  const k = key(x, y, z);
+  if (!blocks.has(k) || blocks.get(k) === FLOOR) return false;
+  blocks.delete(k);
+  const mesh = meshes.get(k);
+  if (mesh) scene.remove(mesh);
+  meshes.delete(k);
+  persist();
+  return true;
+}
+function solidAt(x, y, z) { return blocks.has(key(x, y, z)); }
+function buildStarter() {
+  for (let x = -YARD; x <= YARD; x++) {
+    for (let z = -YARD; z <= YARD; z++) setBlock(x, 0, z, FLOOR, false);
+  }
+  // Boxy silver-and-green car
+  const cx = -4, cz = -1;
+  [[-1, -2], [1, -2], [-1, 1], [1, 1]].forEach(([dx, dz]) => setBlock(cx + dx, 1, cz + dz, "star", false));
+  for (let x = -1; x <= 1; x++) {
+    for (let z = -2; z <= 2; z++) setBlock(cx + x, 2, cz + z, "steel", false);
+  }
+  for (let z = -2; z <= 2; z++) {
+    setBlock(cx - 1, 2, cz + z, "battery", false);
+    setBlock(cx + 1, 2, cz + z, "battery", false);
+  }
+  for (let x = -1; x <= 1; x++) {
+    for (let z = -1; z <= 0; z++) setBlock(cx + x, 3, cz + z, "battery", false);
+  }
+  setBlock(cx, 3, cz + 1, "star", false);
+  setBlock(cx - 1, 3, cz + 1, "steel", false);
+  setBlock(cx + 1, 3, cz + 1, "steel", false);
+
+  // Short white rocket on a pad
+  const rx = 4, rz = -1;
+  for (let x = -2; x <= 2; x++) {
+    for (let z = -2; z <= 2; z++) {
+      if (Math.abs(x) + Math.abs(z) <= 3) setBlock(rx + x, 1, rz + z, "steel", false);
+    }
+  }
+  [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dz]) => setBlock(rx + dx, 2, rz + dz, "rocket", false));
+  for (let y = 2; y <= 6; y++) setBlock(rx, y, rz, "rocket", false);
+  setBlock(rx, 4, rz, "star", false);
+  setBlock(rx, 7, rz, "rocket", false);
+  setBlock(rx, 8, rz, "mars", false);
+}
+function clearWorld() {
+  meshes.forEach(m => scene.remove(m));
+  meshes.clear();
+  blocks.clear();
+}
+function persist() {
+  const data = [];
+  blocks.forEach((type, k) => { if (type !== FLOOR) data.push([k, type]); });
+  try { localStorage.setItem(SAVE, JSON.stringify({ data, selected, px: player.x, py: player.y, pz: player.z, yaw, pitch })); } catch (e) {}
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    clearWorld();
+    for (let x = -YARD; x <= YARD; x++) for (let z = -YARD; z <= YARD; z++) setBlock(x, 0, z, FLOOR, false);
+    saved.data.forEach(([k, type]) => {
+      const [x, y, z] = k.split(",").map(Number);
+      if (materials[type]) setBlock(x, y, z, type, false);
+    });
+    selected = saved.selected || selected;
+    player.x = saved.px; player.y = saved.py; player.z = saved.pz;
+    yaw = saved.yaw; pitch = saved.pitch;
+    return true;
+  } catch (e) { return false; }
+}
+function resetYard() {
+  localStorage.removeItem(SAVE);
+  clearWorld();
+  buildStarter();
+  player.x = 0.5; player.y = 1.1; player.z = 6.4; player.vy = 0;
+  yaw = Math.PI; pitch = -0.38;
+  persist();
+  toast("Yard reset");
+  paintPalette();
+}
+
+function overlaps(nx, ny, nz) {
+  const minX = Math.floor(nx - radius), maxX = Math.floor(nx + radius);
+  const minY = Math.floor(ny), maxY = Math.floor(ny + height - 0.01);
+  const minZ = Math.floor(nz - radius), maxZ = Math.floor(nz + radius);
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      for (let z = minZ; z <= maxZ; z++) if (solidAt(x, y, z)) return true;
+    }
+  }
+  return false;
+}
+function moveAxis(axis, next) {
+  const p = { x: player.x, y: player.y, z: player.z };
+  p[axis] = next;
+  if (!overlaps(p.x, p.y, p.z)) { player[axis] = next; return true; }
+  return false;
+}
+
+function aimCast() {
+  const origin = camera.position.clone();
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+  let x = origin.x, y = origin.y, z = origin.z;
+  let ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  const stepX = dir.x < 0 ? -1 : 1, stepY = dir.y < 0 ? -1 : 1, stepZ = dir.z < 0 ? -1 : 1;
+  const tDeltaX = Math.abs(1 / (dir.x || 1e-8));
+  const tDeltaY = Math.abs(1 / (dir.y || 1e-8));
+  const tDeltaZ = Math.abs(1 / (dir.z || 1e-8));
+  let tMaxX = dir.x === 0 ? Infinity : ((dir.x > 0 ? ix + 1 : ix) - x) / dir.x;
+  let tMaxY = dir.y === 0 ? Infinity : ((dir.y > 0 ? iy + 1 : iy) - y) / dir.y;
+  let tMaxZ = dir.z === 0 ? Infinity : ((dir.z > 0 ? iz + 1 : iz) - z) / dir.z;
+  let face = [0, 0, 0];
+  for (let i = 0; i < 10; i++) {
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      ix += stepX; tMaxX += tDeltaX; face = [-stepX, 0, 0];
+    } else if (tMaxY < tMaxZ) {
+      iy += stepY; tMaxY += tDeltaY; face = [0, -stepY, 0];
+    } else {
+      iz += stepZ; tMaxZ += tDeltaZ; face = [0, 0, -stepZ];
+    }
+    if (solidAt(ix, iy, iz)) return { x: ix, y: iy, z: iz, face, type: blocks.get(key(ix, iy, iz)) };
+  }
+  return null;
+}
+function placeBlock() {
+  const hit = aimCast();
+  if (!hit || hit.type === FLOOR && hit.face[1] === 0) {
+    if (!hit) { toast("Look at a block"); return; }
+  }
+  const x = hit.x + hit.face[0], y = hit.y + hit.face[1], z = hit.z + hit.face[2];
+  if (y < 1 || y > 12 || Math.abs(x) > YARD || Math.abs(z) > YARD) return;
+  if (solidAt(x, y, z)) return;
+  const boxHitsPlayer = overlaps(player.x, player.y, player.z) || (
+    Math.abs((x + 0.5) - player.x) < radius + 0.5 &&
+    player.y < y + 1 && player.y + height > y &&
+    Math.abs((z + 0.5) - player.z) < radius + 0.5
+  );
+  if (boxHitsPlayer) { toast("Too close"); return; }
+  setBlock(x, y, z, selected, true);
+  blip(520);
+}
+function breakBlock() {
+  const hit = aimCast();
+  if (!hit || hit.type === FLOOR) { toast("Can't break the yard"); return; }
+  removeBlock(hit.x, hit.y, hit.z);
+  blip(180);
+}
+let audioCtx;
+function blip(freq) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.value = freq;
+    o.type = "square";
+    g.gain.setValueAtTime(0.03, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.09);
+  } catch (e) {}
+}
+
+function paintPalette() {
+  const row = document.getElementById("palette");
+  row.innerHTML = "";
+  TYPES.forEach(t => {
+    const b = document.createElement("button");
+    b.className = "chip" + (t.id === selected ? " on" : "");
+    b.type = "button";
+    b.innerHTML = '<span class="swatch" style="background:' + t.color.toString(16).padStart(6, "0").replace(/^/, "#") + '"></span>' + t.name;
+    b.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      selected = t.id;
+      paintPalette();
+      persist();
+    });
+    row.appendChild(b);
+  });
+}
+function typeName(id) {
+  const t = TYPES.find(x => x.id === id);
+  return t ? t.name : "yard";
+}
+
+document.getElementById("place").addEventListener("pointerdown", e => { e.preventDefault(); placeBlock(); });
+document.getElementById("break").addEventListener("pointerdown", e => { e.preventDefault(); breakBlock(); });
+document.getElementById("reset").addEventListener("click", resetYard);
+document.querySelectorAll("[data-move]").forEach(btn => {
+  const name = btn.dataset.move;
+  const down = e => { e.preventDefault(); held[name] = true; if (name === "jump" && player.onGround) player.vy = 7.2; };
+  const up = e => { e.preventDefault(); held[name] = false; };
+  btn.addEventListener("pointerdown", down);
+  btn.addEventListener("pointerup", up);
+  btn.addEventListener("pointercancel", up);
+  btn.addEventListener("pointerleave", up);
+});
+
+let looking = false, lastX = 0, lastY = 0;
+canvas.addEventListener("pointerdown", e => {
+  if (e.clientX < window.innerWidth * 0.42) return;
+  looking = true;
+  lastX = e.clientX; lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", e => {
+  if (!looking) return;
+  yaw -= (e.clientX - lastX) * 0.005;
+  pitch -= (e.clientY - lastY) * 0.004;
+  pitch = Math.max(-1.2, Math.min(1.15, pitch));
+  lastX = e.clientX; lastY = e.clientY;
+});
+function endLook() { looking = false; }
+canvas.addEventListener("pointerup", endLook);
+canvas.addEventListener("pointercancel", endLook);
+
+window.addEventListener("keydown", e => {
+  const map = { KeyW: "forward", KeyS: "back", KeyA: "left", KeyD: "right", Space: "jump" };
+  if (map[e.code]) { held[map[e.code]] = true; if (e.code === "Space" && player.onGround) player.vy = 7.2; e.preventDefault(); }
+  if (e.code === "KeyQ") breakBlock();
+  if (e.code === "KeyE") placeBlock();
+});
+window.addEventListener("keyup", e => {
+  const map = { KeyW: "forward", KeyS: "back", KeyA: "left", KeyD: "right", Space: "jump" };
+  if (map[e.code]) held[map[e.code]] = false;
+});
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+document.getElementById("play").addEventListener("click", () => {
+  document.getElementById("start").style.display = "none";
+});
+
+if (!load()) buildStarter();
+paintPalette();
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  const sin = Math.sin(yaw), cos = Math.cos(yaw);
+  let mx = 0, mz = 0;
+  if (held.forward) { mx -= sin; mz -= cos; }
+  if (held.back) { mx += sin; mz += cos; }
+  if (held.left) { mx -= cos; mz += sin; }
+  if (held.right) { mx += cos; mz -= sin; }
+  const len = Math.hypot(mx, mz) || 1;
+  const speed = 4.4;
+  player.vx = mx / len * speed * (mx || mz ? 1 : 0);
+  player.vz = mz / len * speed * (mx || mz ? 1 : 0);
+  if (!(mx || mz)) { player.vx = 0; player.vz = 0; }
+  player.vy -= 20 * dt;
+  moveAxis("x", player.x + player.vx * dt);
+  moveAxis("z", player.z + player.vz * dt);
+  player.onGround = false;
+  if (!moveAxis("y", player.y + player.vy * dt)) {
+    if (player.vy < 0) player.onGround = true;
+    player.vy = 0;
+  }
+  if (player.y < 0.2) { player.y = 1.1; player.vy = 0; }
+
+  const eye = player.y + 1.35;
+  camera.position.set(player.x, eye, player.z);
+  camera.rotation.order = "YXZ";
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  const hit = aimCast();
+  document.getElementById("aim").textContent = hit && hit.type !== FLOOR
+    ? typeName(hit.type)
+    : (hit ? "Yard floor" : "Open sky");
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
